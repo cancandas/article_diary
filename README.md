@@ -2,6 +2,19 @@
 
 Akademik makalelerinizi, araştırmalarınızı ve okuma hedeflerinizi yerel olarak yönetebileceğiniz, modern ve zengin arayüze sahip web tabanlı bir **Makale Takip Günlüğü** uygulamasıdır.
 
+---
+
+## 🖼️ Uygulama Arayüzü (Ekran Görüntüleri)
+
+### 1. Ana Kontrol Paneli (Sunum Modunda Maskelenmiş Görünüm)
+![Ana Kontrol Paneli](dashboard_demo.png)
+
+### 2. Yan Yana Düzenleme Modu (Transcribing Mode)
+![Yan Yana Düzenleme Modu](edit_modal_demo.png)
+
+### 3. Okuma Hedefleri Panosu (Goals Dashboard)
+![Okuma Hedefleri](goals_demo.png)
+
 Bu uygulama hem **bağımsız sunucusuz modda** (doğrudan `index.html` dosyası üzerinden tarayıcı hafızasında) hem de **yerel Python sunucusuyla** (klasör senkronizasyonu ve otomatik dosya organizasyonu ile) çalışacak şekilde çift katmanlı tasarlanmıştır.
 
 ---

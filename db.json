@@ -274,5 +274,19 @@
     }
   ],
   "deletedPdfFiles": [],
-  "goals": []
+  "goals": [
+    {
+      "id": "goal-1783945471982",
+      "title": "Demo Okuma Hedefi",
+      "targetDate": "202612-03-01",
+      "papers": [
+        {
+          "paperId": "pdf-1783920474-0",
+          "targetProgress": 100
+        }
+      ],
+      "createdAt": "2026-07-13T12:24:31.982Z",
+      "updatedAt": "2026-07-13T12:24:31.982Z"
+    }
+  ]
 }
