@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PaperList - Akademik Yayın Takip Uygulaması</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="dark-theme">
+    <!-- App Container -->
+    <div class="app-container">
+        
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <i data-lucide="graduation-cap" class="logo-icon"></i>
+                    <h1>Paper<span>List</span></h1>
+                </div>
+                <button id="theme-toggle" class="btn-icon" title="Temayı Değiştir">
+                    <i data-lucide="sun" class="sun-icon"></i>
+                    <i data-lucide="moon" class="moon-icon"></i>
+                </button>
+            </div>
+
+            <!-- Stats Widget -->
+            <div class="sidebar-widget stats-widget">
+                <h3>Genel Durum</h3>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <span class="stat-value" id="stat-total">0</span>
+                        <span class="stat-label">Toplam</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-value text-success" id="stat-read">0</span>
+                        <span class="stat-label">Okundu</span>
+                    </div>
+                </div>
+                <div class="progress-container">
+                    <div class="progress-bar-header">
+                        <span>Okuma Oranı</span>
+                        <span id="stat-progress-text">0%</span>
+                    </div>
+                    <div class="progress-bar-bg">
+                        <div class="progress-bar-fill" id="stat-progress-fill" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Navigation / Filters -->
+            <nav class="sidebar-nav">
+                <div class="nav-section">
+                    <span class="nav-section-title">Görünümler</span>
+                    <button class="nav-btn active" id="nav-all-papers">
+                        <i data-lucide="file-text"></i>
+                        Tüm Yayınlar
+                    </button>
+                    <button class="nav-btn" id="nav-goals">
+                        <i data-lucide="target"></i>
+                        Okuma Hedefleri
+                    </button>
+                    <button class="nav-btn" id="nav-analytics">
+                        <i data-lucide="bar-chart-2"></i>
+                        İstatistikler
+                    </button>
+                </div>
+
+                <!-- Filters -->
+                <div class="nav-section">
+                    <span class="nav-section-title">Filtrele</span>
+                    
+                    <div class="filter-group">
+                        <label for="filter-project">Proje</label>
+                        <select id="filter-project" class="filter-select">
+                            <option value="">Tümü</option>
+                        </select>
+                    </div>
+
+                    <div class="filter-group">
+                        <label for="filter-topic">Konu</label>
+                        <select id="filter-topic" class="filter-select">
+                            <option value="">Tümü</option>
+                        </select>
+                    </div>
+
+                    <div class="filter-group">
+                        <label for="filter-status">Okuma Durumu</label>
+                        <select id="filter-status" class="filter-select">
+                            <option value="">Tümü</option>
+                            <option value="unread">Okunmadı</option>
+                            <option value="read">Okundu</option>
+                        </select>
+                    </div>
+                    
+                    <button id="btn-clear-filters" class="btn-secondary btn-sm btn-block hidden">
+                        <i data-lucide="filter-x"></i> Filtreleri Temizle
+                    </button>
+                </div>
+                
+                <!-- Quick Lists / Settings -->
+                <div class="nav-section">
+                    <span class="nav-section-title">Yönetim</span>
+                    <button class="nav-btn" id="nav-manage-projects">
+                        <i data-lucide="folder"></i> Projeleri Yönet
+                    </button>
+                    <button class="nav-btn" id="nav-manage-topics">
+                        <i data-lucide="tag"></i> Konuları Yönet
+                    </button>
+                </div>
+            </nav>
+
+            <!-- Sidebar Footer -->
+            <div class="sidebar-footer" style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: auto; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+                <button id="btn-show-history" class="btn-outline btn-xs" style="justify-content: center; width: 100%; display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem;" title="Yerel Yedek Geçmişi">
+                    <i data-lucide="history"></i> Geçmiş
+                </button>
+                <div style="display: flex; gap: 0.5rem; width: 100%;">
+                    <button id="btn-export" class="btn-outline btn-xs" style="flex: 1; justify-content: center; padding: 0.5rem 0.25rem;" title="Verileri Dışa Aktar">
+                        <i data-lucide="download"></i> Dışa Aktar
+                    </button>
+                    <button id="btn-import" class="btn-outline btn-xs" style="flex: 1; justify-content: center; padding: 0.5rem 0.25rem;" title="Verileri İçe Aktar">
+                        <i data-lucide="upload"></i> İçe Aktar
+                    </button>
+                </div>
+                <input type="file" id="file-import" accept=".json" class="hidden">
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            
+            <!-- Dashboard Split View -->
+            <div class="main-content-split">
+                <!-- Dashboard View -->
+                <div id="view-papers-container" class="content-view active">
+                    <!-- Top Toolbar -->
+                    <header class="main-header">
+                        <div class="search-bar-container">
+                            <i data-lucide="search" class="search-icon"></i>
+                            <input type="text" id="search-input" placeholder="Başlık, yazar veya notlarda ara...">
+                        </div>
+                        <div class="action-buttons">
+                            <button id="btn-add-paper" class="btn-primary">
+                                <i data-lucide="plus"></i> Paper Ekle
+                            </button>
+                        </div>
+                    </header>
+
+                    <!-- Controls Bar (Sorting & Grouping) -->
+                    <section class="controls-bar">
+                        <div class="control-item">
+                            <label for="sort-select">Sıralama:</label>
+                            <select id="sort-select" class="control-select">
+                                <option value="importance">Önem Sırası</option>
+                                <option value="date-desc">Yayın Tarihi (Yeni -> Eski)</option>
+                                <option value="date-asc">Yayın Tarihi (Eski -> Yeni)</option>
+                                <option value="added-desc">Eklenme Tarihi (Yeni -> Eski)</option>
+                            </select>
+                        </div>
+
+                        <div class="control-item">
+                            <label for="group-select">Gruplandırma:</label>
+                            <select id="group-select" class="control-select">
+                                <option value="none">Yok</option>
+                                <option value="project">Projelere Göre</option>
+                                <option value="topic">Konulara Göre</option>
+                                <option value="isRead">Okuma Durumuna Göre</option>
+                            </select>
+                        </div>
+                    </section>
+
+                    <!-- Paper List Container -->
+                    <div class="papers-list-wrapper">
+                        <!-- Dynamic List of Papers -->
+                        <div id="papers-list" class="papers-list">
+                            <!-- Loaded dynamically via JavaScript -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PDF Viewer Panel -->
+                <div id="pdf-viewer-container" class="pdf-viewer-container">
+                    <div class="pdf-viewer-header">
+                        <div class="pdf-title-info">
+                            <i data-lucide="file-text"></i>
+                            <span id="pdf-viewer-title">Lütfen bir PDF seçin</span>
+                        </div>
+                        <div class="pdf-viewer-controls" style="display: flex; align-items: center; gap: 0.5rem; margin-left: auto; margin-right: 1.5rem;">
+                            <label for="pdf-current-page" style="font-size: 0.8rem; color: var(--text-secondary); white-space: nowrap;">Son Kaldığım Sayfa:</label>
+                            <div style="display: flex; align-items: center; border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden; background-color: var(--bg-app);">
+                                <button type="button" id="btn-pdf-page-dec" class="btn-icon btn-xs" style="width: 28px; height: 28px; border-radius: 0;" title="Önceki Sayfa">
+                                    <i data-lucide="minus" style="width: 12px; height: 12px;"></i>
+                                </button>
+                                <input type="number" id="pdf-current-page" min="1" value="1" style="width: 45px; text-align: center; border: none; background: transparent; color: var(--text-primary); font-size: 0.85rem; font-weight: 600; padding: 0.2rem 0; outline: none; -moz-appearance: textfield;">
+                                <button type="button" id="btn-pdf-page-inc" class="btn-icon btn-xs" style="width: 28px; height: 28px; border-radius: 0;" title="Sonraki Sayfa">
+                                    <i data-lucide="plus" style="width: 12px; height: 12px;"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <button id="btn-close-pdf" class="btn-icon" title="PDF Göstericiyi Kapat">
+                            <i data-lucide="x"></i>
+                        </button>
+                    </div>
+                    <div class="pdf-iframe-wrapper">
+                        <iframe id="pdf-iframe" src=""></iframe>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analytics View -->
+            <div id="view-analytics-container" class="content-view">
+                <header class="main-header">
+                    <h2>İstatistikler & Analiz</h2>
+                </header>
+                <div class="analytics-grid">
+                    <!-- Project Breakdown -->
+                    <div class="analytics-card">
+                        <h3>Projelere Göre Dağılım</h3>
+                        <div class="chart-container" id="chart-projects">
+                            <!-- Custom HTML/SVG Chart -->
+                        </div>
+                    </div>
+                    <!-- Topic Breakdown -->
+                    <div class="analytics-card">
+                        <h3>Konulara Göre Dağılım</h3>
+                        <div class="chart-container" id="chart-topics">
+                            <!-- Custom HTML/SVG Chart -->
+                        </div>
+                    </div>
+                    <!-- Read Progress Card -->
+                    <div class="analytics-card full-width">
+                        <h3>Aylık Okuma İlerleyişi</h3>
+                        <div class="chart-container" id="chart-monthly-progress">
+                            <!-- Custom HTML/SVG Chart -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Reading Targets View -->
+            <div id="view-goals-container" class="content-view">
+                <header class="main-header">
+                    <h2>Okuma Hedefleri</h2>
+                    <div class="action-buttons">
+                        <button id="btn-add-goal" class="btn-primary">
+                            <i data-lucide="plus"></i> Hedef Ekle
+                        </button>
+                    </div>
+                </header>
+                
+                <div class="goals-grid" id="goals-list">
+                    <!-- Populated dynamically via JavaScript -->
+                </div>
+            </div>
+            
+        </main>
+
+        <!-- Right Side Detail Drawer -->
+        <aside class="detail-drawer" id="detail-drawer">
+            <div class="drawer-header">
+                <h2>Yayın Detayları</h2>
+                <button id="btn-close-drawer" class="btn-icon">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <div class="drawer-content" id="drawer-content">
+                <!-- Populated dynamically via JS -->
+            </div>
+        </aside>
+
+    </div>
+
+    <!-- Modals -->
+
+    <!-- Add/Edit Paper Modal -->
+    <div class="modal-overlay" id="paper-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 id="modal-title">Yeni Paper Ekle</h2>
+                <button class="btn-icon btn-close-modal"><i data-lucide="x"></i></button>
+            </div>
+            <form id="paper-form" class="modal-body">
+                <input type="hidden" id="paper-id">
+                
+                <div class="form-group">
+                    <label for="paper-title" class="required">Başlık</label>
+                    <input type="text" id="paper-title" placeholder="Örn: Attention Is All You Need" required autocomplete="off">
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="paper-authors">Yazarlar</label>
+                        <input type="text" id="paper-authors" placeholder="Örn: Vaswani et al." autocomplete="off">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="paper-year" class="required">Yayın Yılı</label>
+                        <input type="number" id="paper-year" min="1900" max="2100" placeholder="Örn: 2017" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="paper-month">Yayın Ayı (Opsiyonel)</label>
+                        <select id="paper-month">
+                            <option value="">Seçiniz</option>
+                            <option value="1">Ocak</option>
+                            <option value="2">Şubat</option>
+                            <option value="3">Mart</option>
+                            <option value="4">Nisan</option>
+                            <option value="5">Mayıs</option>
+                            <option value="6">Haziran</option>
+                            <option value="7">Temmuz</option>
+                            <option value="8">Ağustos</option>
+                            <option value="9">Eylül</option>
+                            <option value="10">Ekim</option>
+                            <option value="11">Kasım</option>
+                            <option value="12">Aralık</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="paper-project" class="required">Proje</label>
+                        <div class="combobox-container">
+                            <input type="text" id="paper-project" placeholder="Proje adı girin veya seçin..." required autocomplete="off">
+                            <div class="combobox-dropdown" id="project-combo-dropdown"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="paper-topic" class="required">Konu / Kategori</label>
+                        <div class="combobox-container">
+                            <input type="text" id="paper-topic" placeholder="Konu girin veya seçin..." required autocomplete="off">
+                            <div class="combobox-dropdown" id="topic-combo-dropdown"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group" style="grid-column: span 2;">
+                        <label for="paper-pdf">Bağlı PDF Dosyası (İsteğe Bağlı)</label>
+                        <div class="combobox-container">
+                            <input type="text" id="paper-pdf" placeholder="pdf klasöründeki dosya adını girin veya seçin..." autocomplete="off">
+                            <div class="combobox-dropdown" id="pdf-combo-dropdown"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="paper-page-count">Toplam Sayfa Sayısı</label>
+                        <input type="number" id="paper-page-count" min="1" placeholder="Örn: 10" value="1">
+                    </div>
+                    <div class="form-group">
+                        <label for="paper-read-pages-modal">Okunan Sayfa Sayısı</label>
+                        <input type="number" id="paper-read-pages-modal" min="0" placeholder="Örn: 0" value="0">
+                    </div>
+                </div>
+
+                <div class="form-group-checkbox">
+                    <label class="checkbox-container">
+                        <input type="checkbox" id="paper-isread">
+                        <span class="checkmark"></span>
+                        Okundu olarak işaretle
+                    </label>
+                </div>
+
+                <div class="form-group">
+                    <label for="paper-notes">Notlar</label>
+                    <textarea id="paper-notes" rows="4" placeholder="Paper hakkında notlarınızı buraya yazabilirsiniz (Markdown desteklenir)..."></textarea>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary btn-close-modal">İptal</button>
+                    <button type="submit" class="btn-primary" id="btn-save-paper">Kaydet</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add/Edit Reading Target Modal -->
+    <div class="modal-overlay" id="goal-modal">
+        <div class="modal max-w-lg">
+            <div class="modal-header">
+                <h2 id="goal-modal-title">Yeni Okuma Hedefi Ekle</h2>
+                <button class="btn-icon btn-close-modal"><i data-lucide="x"></i></button>
+            </div>
+            <form id="goal-form" class="modal-body">
+                <input type="hidden" id="goal-id">
+                
+                <div class="form-group">
+                    <label for="goal-title" class="required">Hedef Adı</label>
+                    <input type="text" id="goal-title" placeholder="Örn: Transformers Okuma Kampı" required autocomplete="off">
+                </div>
+
+                <div class="form-group">
+                    <label for="goal-date" class="required">Hedef Tarih</label>
+                    <input type="date" id="goal-date" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="required">Yayın Seçimi ve Hedef Okuma Yüzdeleri</label>
+                    <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                        Bu hedefe dahil etmek istediğiniz yayınları seçip hedef okuma oranlarını (%) belirleyin:
+                    </div>
+                    <div id="goal-papers-selection" class="manage-list" style="max-height: 320px; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 8px; background-color: var(--bg-app); gap: 0.75rem;">
+                        <!-- Dynamic list of papers with checkboxes and target percentage sliders -->
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn-secondary btn-close-modal">İptal</button>
+                    <button type="submit" class="btn-primary" id="btn-save-goal">Kaydet</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Manage Projects Modal -->
+    <div class="modal-overlay" id="projects-modal">
+        <div class="modal max-w-md">
+            <div class="modal-header">
+                <h2>Projeleri Yönet</h2>
+                <button class="btn-icon btn-close-modal"><i data-lucide="x"></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="add-project-form" class="inline-add-form">
+                    <input type="text" id="new-project-name" placeholder="Yeni proje adı..." required autocomplete="off">
+                    <button type="submit" class="btn-primary btn-sm"><i data-lucide="plus"></i> Ekle</button>
+                </form>
+                <div class="manage-list" id="projects-manage-list">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Manage Topics Modal -->
+    <div class="modal-overlay" id="topics-modal">
+        <div class="modal max-w-md">
+            <div class="modal-header">
+                <h2>Konuları Yönet</h2>
+                <button class="btn-icon btn-close-modal"><i data-lucide="x"></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="add-topic-form" class="inline-add-form">
+                    <input type="text" id="new-topic-name" placeholder="Yeni konu adı..." required autocomplete="off">
+                    <button type="submit" class="btn-primary btn-sm"><i data-lucide="plus"></i> Ekle</button>
+                </form>
+                <div class="manage-list" id="topics-manage-list">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Local Backups History Modal -->
+    <div class="modal-overlay" id="history-modal">
+        <div class="modal max-w-md">
+            <div class="modal-header">
+                <h2>Yerel Yedek Geçmişi</h2>
+                <button class="btn-icon btn-close-modal"><i data-lucide="x"></i></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-secondary text-sm margin-bottom-md" style="margin-bottom: 1rem;">
+                    Son yaptığınız 5 değişiklik tarayıcı belleğine yedeklenmiştir. Aşağıdaki yedekleme noktalarından birine tıklayarak o ana geri dönebilirsiniz:
+                </p>
+                <div class="manage-list" id="history-manage-list">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation Dialog -->
+    <div class="modal-overlay" id="confirm-modal">
+        <div class="modal max-w-xs text-center">
+            <div class="modal-body">
+                <i data-lucide="alert-triangle" class="confirm-icon"></i>
+                <h3 id="confirm-title">Silmek istediğinize emin misiniz?</h3>
+                <p id="confirm-message" class="text-secondary text-sm margin-top-sm">Bu işlem geri alınamaz.</p>
+                <div class="modal-footer flex-center margin-top-md">
+                    <button class="btn-secondary" id="confirm-btn-cancel">İptal</button>
+                    <button class="btn-danger" id="confirm-btn-yes">Evet, Sil</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
