@@ -79,10 +79,49 @@ let activeView = 'papers'; // 'papers' or 'analytics'
 let selectedPaperId = null;
 let collapsedGroups = new Set();
 let isNotesEditMode = false;
+let isDemoMode = false;
+
+function getProjectDisplayName(projectName) {
+    if (!isDemoMode) return projectName;
+    if (!projectName) return projectName;
+    if (projectName === "Otomatik PDF") return "Otomatik PDF";
+    
+    // Sort unique projects to keep mapping consistent
+    const projNames = [...new Set(papers.map(p => p.project).filter(Boolean))].sort();
+    const idx = projNames.indexOf(projectName);
+    
+    const mockNames = [
+        "Deep Learning Research",
+        "Reinforcement Learning",
+        "Natural Language Processing",
+        "Computer Vision Projects",
+        "Large Language Models",
+        "Optimization Algorithms",
+        "Autonomous Agents",
+        "Neural Architecture Search"
+    ];
+    
+    if (idx !== -1) {
+        return mockNames[idx % mockNames.length];
+    }
+    return "Araştırma Projesi";
+}
+
+function toggleDemoMode() {
+    isDemoMode = !isDemoMode;
+    const btn = document.getElementById('demo-mode-toggle');
+    if (btn) {
+        btn.innerHTML = `<i id="demo-icon" data-lucide="${isDemoMode ? 'eye-off' : 'eye'}"></i>`;
+        lucide.createIcons();
+    }
+    showToast(isDemoMode ? "Sunum Modu aktif (Özel proje isimleri maskelendi)" : "Sunum Modu deaktif", "info");
+    renderAll();
+}
 
 // --- DOM ELEMENTS ---
 const elements = {
     themeToggle: document.getElementById('theme-toggle'),
+    demoModeToggle: document.getElementById('demo-mode-toggle'),
     
     // Sidebar Stats
     statTotal: document.getElementById('stat-total'),
@@ -489,7 +528,7 @@ function renderFiltersDropdowns() {
     projects.forEach(p => {
         const opt = document.createElement('option');
         opt.value = p.name;
-        opt.textContent = p.name;
+        opt.textContent = getProjectDisplayName(p.name);
         if (p.name === selectedProj) opt.selected = true;
         elements.filterProject.appendChild(opt);
     });
@@ -590,7 +629,7 @@ function renderList() {
             
             if (groupBy === 'project') {
                 key = p.project || 'Projesiz';
-                label = key;
+                label = getProjectDisplayName(key);
             } else if (groupBy === 'topic') {
                 key = p.topic || 'Konusuz';
                 label = key;
@@ -617,7 +656,7 @@ function renderList() {
             header.className = `group-header ${isCollapsed ? 'collapsed' : ''}`;
             header.innerHTML = `
                 <i data-lucide="chevron-down"></i>
-                <span>${group.label} (${group.papers.length})</span>
+                <span>${escapeHTML(groupBy === 'project' ? getProjectDisplayName(group.label) : group.label)} (${group.papers.length})</span>
             `;
             header.addEventListener('click', () => {
                 if (collapsedGroups.has(key)) {
@@ -688,7 +727,7 @@ function createPaperItemElement(paper, isDragEnabled) {
                     <span>${dateText}</span>
                 </div>
 
-                ${paper.project ? `<span class="badge badge-project"><i data-lucide="folder"></i> ${escapeHTML(paper.project)}</span>` : ''}
+                ${paper.project ? `<span class="badge badge-project"><i data-lucide="folder"></i> ${escapeHTML(getProjectDisplayName(paper.project))}</span>` : ''}
                 ${paper.topic ? `<span class="badge badge-topic"><i data-lucide="tag"></i> ${escapeHTML(paper.topic)}</span>` : ''}
                 ${paper.pdfFile ? `<span class="badge badge-pdf" title="PDF Göstericiyi Açmak için Tıklayın"><i data-lucide="file-text"></i> PDF</span>` : ''}
             </div>
@@ -999,7 +1038,7 @@ function setupCombobox(inputEl, dropdownEl, dataProvider, onSelect) {
             filtered.forEach(item => {
                 const row = document.createElement('div');
                 row.className = 'combobox-item';
-                row.textContent = item.name;
+                row.textContent = inputEl.id === 'paper-project' ? getProjectDisplayName(item.name) : item.name;
                 row.addEventListener('click', () => {
                     inputEl.value = item.name;
                     dropdownEl.classList.remove('show');
@@ -1025,7 +1064,7 @@ function setupCombobox(inputEl, dropdownEl, dataProvider, onSelect) {
             filtered.forEach(item => {
                 const row = document.createElement('div');
                 row.className = 'combobox-item';
-                row.textContent = item.name;
+                row.textContent = inputEl.id === 'paper-project' ? getProjectDisplayName(item.name) : item.name;
                 row.addEventListener('click', () => {
                     inputEl.value = item.name;
                     dropdownEl.classList.remove('show');
@@ -1076,7 +1115,7 @@ function renderDrawerContent(paperId) {
         <div class="drawer-meta-grid">
             <div class="drawer-meta-item">
                 <span class="drawer-meta-label">Proje</span>
-                <span class="drawer-meta-value">${paper.project ? `<span class="badge badge-project">${escapeHTML(paper.project)}</span>` : 'Belirtilmemiş'}</span>
+                <span class="drawer-meta-value">${paper.project ? `<span class="badge badge-project">${escapeHTML(getProjectDisplayName(paper.project))}</span>` : 'Belirtilmemiş'}</span>
             </div>
             <div class="drawer-meta-item">
                 <span class="drawer-meta-label">Konu</span>
@@ -1892,6 +1931,11 @@ function parseMarkdown(text) {
 // --- SETUP EVENT LISTENERS ---
 function setupEventListeners() {
     
+    // Demo Mode Toggle
+    elements.demoModeToggle.addEventListener('click', () => {
+        toggleDemoMode();
+    });
+
     // Theme Toggle
     elements.themeToggle.addEventListener('click', () => {
         const isDark = document.body.classList.toggle('dark-theme');
