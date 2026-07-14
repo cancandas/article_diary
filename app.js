@@ -276,6 +276,9 @@ function ensurePaperFields() {
         if (p.readPagesCount === undefined) {
             p.readPagesCount = p.isRead ? p.pageCount : Math.round(((p.progress || 0) / 100) * p.pageCount);
         }
+        if (p.highlights === undefined) {
+            p.highlights = [];
+        }
     });
 }
 
@@ -1190,6 +1193,41 @@ function renderDrawerContent(paperId) {
             </div>
         </div>
 
+        <!-- Alıntılar ve Vurgular Section -->
+        <div class="drawer-highlights-section" style="padding: 1rem; border: 1px solid var(--border-color); border-radius: 8px; background-color: var(--bg-app); margin-top: 0.75rem; display: flex; flex-direction: column; gap: 0.75rem;">
+            <h3 style="font-size: 0.9rem; font-weight: 600; color: var(--text-primary); margin: 0; display: flex; align-items: center; justify-content: space-between;">
+                <span style="display: flex; align-items: center; gap: 0.5rem;">
+                    <i data-lucide="highlighter" style="width: 16px; height: 16px; color: var(--primary);"></i>
+                    Alıntılar ve Vurgular
+                </span>
+                <span id="btn-grab-selection" style="font-size: 0.7rem; color: var(--primary); cursor: pointer; text-decoration: underline;" title="Ekrandan seçtiğiniz metni buraya kopyalar">Seçileni Getir</span>
+            </h3>
+            
+            <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                <textarea id="highlight-text-input" rows="2" placeholder="PDF'ten kopyaladığınız metni yapıştırın veya yazın..." style="width: 100%; border: 1px solid var(--border-color); border-radius: 6px; background-color: var(--bg-card); color: var(--text-primary); font-size: 0.8rem; padding: 0.4rem; resize: vertical; font-family: inherit;"></textarea>
+                
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
+                    <div style="display: flex; align-items: center; gap: 0.25rem;">
+                        <span style="font-size: 0.75rem; color: var(--text-secondary);">Sayfa:</span>
+                        <input type="number" id="highlight-page-input" min="1" max="${paper.pageCount || 9999}" value="${paper.lastReadPage || 1}" style="width: 55px; text-align: center; border: 1px solid var(--border-color); border-radius: 6px; background-color: var(--bg-card); color: var(--text-primary); font-size: 0.75rem; padding: 0.15rem; font-weight: 600;">
+                    </div>
+                    
+                    <div style="display: flex; gap: 0.35rem;" class="color-picker-container">
+                        <button class="color-dot active" data-color="yellow" style="width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--primary); background-color: #ffd166; cursor: pointer; padding:0;"></button>
+                        <button class="color-dot" data-color="green" style="width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--border-color); background-color: #06d6a0; cursor: pointer; padding:0;"></button>
+                        <button class="color-dot" data-color="blue" style="width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--border-color); background-color: #118ab2; cursor: pointer; padding:0;"></button>
+                        <button class="color-dot" data-color="pink" style="width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--border-color); background-color: #ef476f; cursor: pointer; padding:0;"></button>
+                    </div>
+                    
+                    <button id="btn-add-highlight" class="btn-primary" style="padding: 0.35rem 0.75rem; font-size: 0.75rem; font-weight: 600; border-radius: 6px; border: none; cursor: pointer;">Ekle</button>
+                </div>
+            </div>
+            
+            <div id="drawer-highlights-list" style="max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.25rem; padding-right: 0.25rem;">
+                <!-- Vurgular buraya dinamik eklenecek -->
+            </div>
+        </div>
+
         <div class="drawer-notes-section">
             <div class="drawer-notes-header">
                 <h3>Kişisel Notlar</h3>
@@ -1329,6 +1367,139 @@ function renderDrawerContent(paperId) {
             elements.pdfCurrentPageInput.value = val;
         }
     });
+
+    // Render Highlights list initially
+    renderHighlights(paper);
+
+    // Highlights event listeners
+    let selectedColor = 'yellow';
+    const colorDots = document.querySelectorAll('.color-dot');
+    colorDots.forEach(dot => {
+        dot.addEventListener('click', (e) => {
+            e.preventDefault();
+            colorDots.forEach(d => {
+                d.style.border = '1px solid var(--border-color)';
+                d.classList.remove('active');
+            });
+            dot.style.border = '2px solid var(--primary)';
+            dot.classList.add('active');
+            selectedColor = dot.getAttribute('data-color');
+        });
+    });
+
+    const grabSelectionBtn = document.getElementById('btn-grab-selection');
+    grabSelectionBtn.addEventListener('click', () => {
+        const selectedText = window.getSelection().toString().trim();
+        if (selectedText) {
+            document.getElementById('highlight-text-input').value = selectedText;
+        } else {
+            showToast("Lütfen önce PDF panelinden veya sayfadan bir metin seçin.", "info");
+        }
+    });
+
+    const addHighlightBtn = document.getElementById('btn-add-highlight');
+    addHighlightBtn.addEventListener('click', () => {
+        const textVal = document.getElementById('highlight-text-input').value.trim();
+        const pageVal = parseInt(document.getElementById('highlight-page-input').value) || 1;
+        
+        if (!textVal) {
+            showToast("Lütfen vurgulanacak metni girin veya ekrandan seçin.", "warning");
+            return;
+        }
+        
+        const newHl = {
+            id: `hl-${Date.now()}`,
+            text: textVal,
+            page: pageVal,
+            color: selectedColor,
+            createdAt: new Date().toISOString()
+        };
+        
+        paper.highlights = paper.highlights || [];
+        paper.highlights.push(newHl);
+        savePapers(false);
+        
+        // Reset form
+        document.getElementById('highlight-text-input').value = '';
+        
+        // Re-render list
+        renderHighlights(paper);
+        showToast("Vurgulanan alıntı başarıyla kaydedildi!", "success");
+    });
+}
+
+function renderHighlights(paper) {
+    const listContainer = document.getElementById('drawer-highlights-list');
+    if (!listContainer) return;
+    
+    listContainer.innerHTML = '';
+    const hls = paper.highlights || [];
+    
+    if (hls.length === 0) {
+        listContainer.innerHTML = `<p style="font-size: 0.75rem; color: var(--text-muted); text-align: center; margin: 0.5rem 0;">Henüz vurgulanmış alıntı yok.</p>`;
+        return;
+    }
+    
+    hls.forEach(hl => {
+        const item = document.createElement('div');
+        
+        const colorStyles = {
+            yellow: { border: '#ffd166', bg: 'rgba(255, 209, 102, 0.08)' },
+            green: { border: '#06d6a0', bg: 'rgba(6, 214, 160, 0.08)' },
+            blue: { border: '#118ab2', bg: 'rgba(17, 138, 178, 0.08)' },
+            pink: { border: '#ef476f', bg: 'rgba(239, 71, 111, 0.08)' }
+        };
+        const style = colorStyles[hl.color] || colorStyles.yellow;
+        
+        item.style.padding = '0.5rem 0.75rem';
+        item.style.borderLeft = `3px solid ${style.border}`;
+        item.style.backgroundColor = style.bg;
+        item.style.borderRadius = '0 6px 6px 0';
+        item.style.display = 'flex';
+        item.style.flexDirection = 'column';
+        item.style.gap = '0.25rem';
+        item.style.position = 'relative';
+        item.className = 'highlight-item-row';
+        
+        item.innerHTML = `
+            <div style="font-size: 0.8rem; color: var(--text-primary); line-height: 1.3; font-style: italic; padding-right: 1.25rem; word-break: break-word;">
+                "${escapeHTML(hl.text)}"
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.25rem;">
+                <span class="badge badge-pdf btn-go-to-page" data-page="${hl.page}" style="font-size: 0.7rem; cursor: pointer; font-weight: 600; background-color: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: var(--text-secondary); display: flex; align-items: center; gap: 0.25rem;" title="PDF'te bu sayfaya git">
+                    <i data-lucide="file-text" style="width: 10px; height: 10px;"></i>
+                    Sayfa ${hl.page}
+                </span>
+                <button class="btn-icon btn-delete-highlight" data-id="${hl.id}" style="padding: 2px; color: var(--text-muted); cursor: pointer;" title="Alıntıyı Sil">
+                    <i data-lucide="trash-2" style="width: 12px; height: 12px;"></i>
+                </button>
+            </div>
+        `;
+        
+        // Add click listener to page badge to navigate PDF
+        item.querySelector('.btn-go-to-page').addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (paper.pdfFile) {
+                openPdfViewer(paper.id);
+                handlePageChange(hl.page);
+            } else {
+                showToast("Bu yayına bağlı bir PDF dosyası yok.", "warning");
+            }
+        });
+        
+        // Add click listener to delete highlight
+        item.querySelector('.btn-delete-highlight').addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (confirm("Bu alıntıyı silmek istediğinize emin misiniz?")) {
+                paper.highlights = paper.highlights.filter(h => h.id !== hl.id);
+                savePapers(false);
+                renderHighlights(paper);
+            }
+        });
+        
+        listContainer.appendChild(item);
+    });
+    lucide.createIcons();
 }
 
 function saveNotes(paperId, text) {
