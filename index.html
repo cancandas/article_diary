@@ -10,6 +10,9 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- PDF.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf_viewer.min.css">
     <link rel="stylesheet" href="styles.css">
 </head>
 <body class="dark-theme">
@@ -196,8 +199,13 @@
                             <i data-lucide="file-text"></i>
                             <span id="pdf-viewer-title">Lütfen bir PDF seçin</span>
                         </div>
-                        <div class="pdf-viewer-controls" style="display: flex; align-items: center; gap: 0.5rem; margin-left: auto; margin-right: 1.5rem;">
-                            <label for="pdf-current-page" style="font-size: 0.8rem; color: var(--text-secondary); white-space: nowrap;">Son Kaldığım Sayfa:</label>
+                        <div class="pdf-viewer-controls" style="display: flex; align-items: center; gap: 0.75rem; margin-left: auto; margin-right: 1rem;">
+                            <!-- Selection highlight trigger button -->
+                            <button id="btn-pdf-highlight-selection" class="btn-primary btn-xs" style="display: none; align-items: center; gap: 0.25rem; padding: 0.35rem 0.75rem; border-radius: 6px; font-weight: 600;" title="PDF içinden seçtiğiniz metni bu sayfaya ait alıntı olarak kaydeder">
+                                <i data-lucide="highlighter" style="width: 12px; height: 12px;"></i> Seçileni Alıntı Yap
+                            </button>
+                            
+                            <label for="pdf-current-page" style="font-size: 0.8rem; color: var(--text-secondary); white-space: nowrap;">Sayfa:</label>
                             <div style="display: flex; align-items: center; border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden; background-color: var(--bg-app);">
                                 <button type="button" id="btn-pdf-page-dec" class="btn-icon btn-xs" style="width: 28px; height: 28px; border-radius: 0;" title="Önceki Sayfa">
                                     <i data-lucide="minus" style="width: 12px; height: 12px;"></i>
@@ -212,8 +220,15 @@
                             <i data-lucide="x"></i>
                         </button>
                     </div>
-                    <div class="pdf-iframe-wrapper">
-                        <iframe id="pdf-iframe" src=""></iframe>
+                    <!-- Custom PDFjs Canvas & TextLayer wrapper -->
+                    <div id="pdf-canvas-wrapper" class="pdf-iframe-wrapper" style="overflow: auto; display: flex; flex-direction: column; align-items: center; background-color: #1e1e24; padding: 1.5rem 1rem; position: relative;">
+                        <div id="pdf-loading-spinner" style="color: var(--text-secondary); font-size: 0.95rem; display: flex; align-items: center; gap: 0.5rem; position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%);">
+                            <i data-lucide="loader" class="animate-spin"></i> Yükleniyor...
+                        </div>
+                        <div id="pdf-page-render-container" style="position: relative; box-shadow: 0 10px 30px rgba(0,0,0,0.5); background: white; display: none;">
+                            <canvas id="pdf-canvas" style="display: block;"></canvas>
+                            <div id="pdf-text-layer" class="textLayer" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; overflow: hidden; pointer-events: auto;"></div>
+                        </div>
                     </div>
                 </div>
             </div>

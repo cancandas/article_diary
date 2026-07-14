@@ -67,6 +67,12 @@ let deletedPdfFiles = [];
 let pdfFiles = []; // All PDF filenames currently on disk
 let goals = []; // Reading targets/goals array
 let currentPdfPaperId = null; // Currently open PDF paper ID
+
+// PDF.js global configurations
+let pdfjsLib = window['pdfjs-dist/build/pdf'];
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+let pdfDoc = null;
+let currentRenderTask = null;
 let filters = {
     search: '',
     project: '',
@@ -209,7 +215,12 @@ const elements = {
     paperPdfInput: document.getElementById('paper-pdf'),
     pdfComboDropdown: document.getElementById('pdf-combo-dropdown'),
     pdfViewerContainer: document.getElementById('pdf-viewer-container'),
-    pdfIframe: document.getElementById('pdf-iframe'),
+    pdfCanvasWrapper: document.getElementById('pdf-canvas-wrapper'),
+    pdfCanvas: document.getElementById('pdf-canvas'),
+    pdfTextLayer: document.getElementById('pdf-text-layer'),
+    pdfPageRenderContainer: document.getElementById('pdf-page-render-container'),
+    pdfLoadingSpinner: document.getElementById('pdf-loading-spinner'),
+    btnPdfHighlightSelection: document.getElementById('btn-pdf-highlight-selection'),
     pdfViewerTitle: document.getElementById('pdf-viewer-title'),
     btnClosePdf: document.getElementById('btn-close-pdf'),
     pdfCurrentPageInput: document.getElementById('pdf-current-page'),
@@ -1476,8 +1487,7 @@ function renderDrawerContent(paperId) {
             const hl = hls[idx];
             if (hl) {
                 if (paper.pdfFile) {
-                    openPdfViewer(paper.id);
-                    handlePageChange(hl.page);
+                    openPdfViewer(paper.id, hl.page);
                     showToast(`@ref${idx + 1} sayfasına yönlendirildi: Sayfa ${hl.page}`, "info");
                 } else {
                     showToast("Bu yayına bağlı bir PDF dosyası yok.", "warning");
@@ -1564,8 +1574,7 @@ function renderHighlights(paper) {
         item.querySelector('.btn-go-to-page').addEventListener('click', (e) => {
             e.stopPropagation();
             if (paper.pdfFile) {
-                openPdfViewer(paper.id);
-                handlePageChange(hl.page);
+                openPdfViewer(paper.id, hl.page);
             } else {
                 showToast("Bu yayına bağlı bir PDF dosyası yok.", "warning");
             }
@@ -2092,61 +2101,160 @@ function restoreHistoryBackup(timestamp) {
 }
 
 // --- PDF VIEWER ACTIONS ---
-function openPdfViewer(paperId) {
+let pdfjsDoc = null;
+let currentRenderTask = null;
+
+async function renderPage(pageNum) {
+    if (!pdfjsDoc) return;
+    
+    // Show spinner, hide page render container
+    elements.pdfLoadingSpinner.style.display = 'flex';
+    elements.pdfPageRenderContainer.style.display = 'none';
+    
+    try {
+        // Cancel any pending render task to avoid graphics overlapping
+        if (currentRenderTask) {
+            currentRenderTask.cancel();
+            currentRenderTask = null;
+        }
+        
+        const page = await pdfjsDoc.getPage(pageNum);
+        
+        // Calculate dynamic scale to fit the canvas wrapper container width
+        const wrapperWidth = elements.pdfCanvasWrapper.clientWidth - 40; // Subtract padding/margin
+        const unscaledViewport = page.getViewport({ scale: 1.0 });
+        const scale = wrapperWidth / unscaledViewport.width;
+        const viewport = page.getViewport({ scale: scale || 1.0 });
+        
+        // Render Canvas
+        const canvas = elements.pdfCanvas;
+        const ctx = canvas.getContext('2d');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        
+        const renderContext = {
+            canvasContext: ctx,
+            viewport: viewport
+        };
+        
+        currentRenderTask = page.render(renderContext);
+        await currentRenderTask.promise;
+        currentRenderTask = null;
+        
+        // Render selectable Text Layer
+        const textContent = await page.getTextContent();
+        const textLayer = elements.pdfTextLayer;
+        textLayer.innerHTML = '';
+        textLayer.style.width = `${viewport.width}px`;
+        textLayer.style.height = `${viewport.height}px`;
+        
+        await pdfjsLib.renderTextLayer({
+            textContent: textContent,
+            container: textLayer,
+            viewport: viewport,
+            textDivs: []
+        }).promise;
+        
+        // Show page render container, hide spinner
+        elements.pdfLoadingSpinner.style.display = 'none';
+        elements.pdfPageRenderContainer.style.display = 'block';
+    } catch (e) {
+        if (e.name === 'RenderingCancelledException' || e.message === 'Rendering cancelled, page.render() promise rejected') {
+            // Expected when page changes quickly, ignore
+            return;
+        }
+        console.error("PDF sayfa çizim hatası:", e);
+        elements.pdfLoadingSpinner.style.display = 'none';
+        showToast("PDF sayfası yüklenirken hata oluştu.", "error");
+    }
+}
+
+async function openPdfViewer(paperId, targetPage = null) {
     const paper = papers.find(p => p.id === paperId);
     if (!paper || !paper.pdfFile) return;
     
     currentPdfPaperId = paperId;
-    
-    const pageNum = paper.lastReadPage || 1;
-    const pdfPath = (isServerMode ? `/pdfs/` : `./pdfs/`) + paper.pdfFile + `#page=${pageNum}`;
-    
-    elements.pdfIframe.src = pdfPath;
     elements.pdfViewerTitle.textContent = paper.title;
-    elements.pdfCurrentPageInput.value = pageNum;
     elements.pdfViewerContainer.style.display = 'flex';
     
-    showToast(`PDF kaldığınız sayfadan açıldı: Sayfa ${pageNum}`, "info");
+    // Target page selection or fall back to last read page
+    let pageNum = targetPage !== null ? targetPage : (paper.lastReadPage || 1);
+    elements.pdfCurrentPageInput.value = pageNum;
+    
+    // Show loader
+    elements.pdfLoadingSpinner.style.display = 'flex';
+    elements.pdfPageRenderContainer.style.display = 'none';
+    
+    const pdfUrl = (isServerMode ? `/pdfs/` : `./pdfs/`) + paper.pdfFile;
+    
+    try {
+        // Cancel any pending render task first
+        if (currentRenderTask) {
+            currentRenderTask.cancel();
+            currentRenderTask = null;
+        }
+
+        // If the document is already loaded, reuse it to skip HTTP request overhead
+        if (!pdfjsDoc || pdfjsDoc.loadingTask.src !== new URL(pdfUrl, window.location.href).href) {
+            pdfjsDoc = await pdfjsLib.getDocument(pdfUrl).promise;
+        }
+        
+        // Sync total pages if not set or incorrect
+        if (!paper.pageCount || paper.pageCount === 1) {
+            paper.pageCount = pdfjsDoc.numPages;
+            savePapers(false);
+            
+            // If details drawer is open, refresh page inputs
+            const totalInput = document.getElementById('drawer-total-pages');
+            if (totalInput) {
+                totalInput.value = pdfjsDoc.numPages;
+            }
+        }
+        
+        // Ensure target page doesn't exceed bounds
+        const finalPage = Math.min(pageNum, pdfjsDoc.numPages);
+        paper.lastReadPage = finalPage;
+        elements.pdfCurrentPageInput.value = finalPage;
+        
+        await renderPage(finalPage);
+        
+        showToast(`PDF yüklendi (Toplam ${pdfjsDoc.numPages} sayfa)`, "success");
+    } catch (e) {
+        console.error("PDF yükleme hatası:", e);
+        elements.pdfLoadingSpinner.style.display = 'none';
+        showToast("PDF dosyası yüklenemedi. Dosya eksik veya bozuk olabilir.", "error");
+    }
     lucide.createIcons();
 }
 
 function closePdfViewer() {
-    elements.pdfIframe.src = "";
+    pdfjsDoc = null;
+    if (currentRenderTask) {
+        currentRenderTask.cancel();
+        currentRenderTask = null;
+    }
+    elements.pdfCanvas.width = 0;
+    elements.pdfCanvas.height = 0;
+    elements.pdfTextLayer.innerHTML = '';
+    elements.btnPdfHighlightSelection.style.display = 'none';
     elements.pdfViewerTitle.textContent = "";
     elements.pdfViewerContainer.style.display = 'none';
     currentPdfPaperId = null;
 }
 
 function handlePageChange(value) {
-    if (!currentPdfPaperId) return;
+    if (!currentPdfPaperId || !pdfjsDoc) return;
     const paper = papers.find(p => p.id === currentPdfPaperId);
     if (!paper) return;
     
     let page = parseInt(value);
     if (isNaN(page) || page < 1) page = 1;
-    if (paper.pageCount && page > paper.pageCount) page = paper.pageCount;
+    if (page > pdfjsDoc.numPages) page = pdfjsDoc.numPages;
     
     paper.lastReadPage = page;
     elements.pdfCurrentPageInput.value = page;
     
-    const pdfPath = (isServerMode ? `/pdfs/` : `./pdfs/`) + paper.pdfFile + `#page=${page}`;
-    
-    // Force reload iframe if the path remains the same (otherwise browser won't navigate on hash change in PDF viewer)
-    const oldSrc = elements.pdfIframe.src;
-    elements.pdfIframe.src = pdfPath;
-    
-    if (oldSrc.split('#')[0] === pdfPath.split('#')[0]) {
-        try {
-            if (elements.pdfIframe.contentWindow) {
-                elements.pdfIframe.contentWindow.location.reload();
-            }
-        } catch (e) {
-            // Cross-origin fallback (force iframe refresh by resetting src)
-            elements.pdfIframe.src = '';
-            elements.pdfIframe.src = pdfPath;
-        }
-    }
-    
+    renderPage(page);
     savePapers(false);
 }
 
@@ -2398,6 +2506,77 @@ function setupEventListeners() {
 
     elements.btnAddGoal.addEventListener('click', openAddGoalModal);
     elements.goalForm.addEventListener('submit', handleGoalFormSubmit);
+
+    // Highlight text selected inside PDF
+    elements.btnPdfHighlightSelection.addEventListener('click', () => {
+        if (!currentPdfPaperId) return;
+        const paper = papers.find(p => p.id === currentPdfPaperId);
+        if (!paper) return;
+
+        const selection = window.getSelection();
+        const selectedText = selection.toString().trim();
+        
+        if (!selectedText) {
+            showToast("Lütfen önce PDF içinden vurgulamak istediğiniz metni seçin.", "warning");
+            return;
+        }
+
+        const pageVal = parseInt(elements.pdfCurrentPageInput.value) || 1;
+        
+        // Find selected highlight color (default to yellow)
+        let color = 'yellow';
+        const activeDot = document.querySelector('.color-dot.active');
+        if (activeDot) {
+            color = activeDot.getAttribute('data-color') || 'yellow';
+        }
+
+        const newHl = {
+            id: `hl-${Date.now()}`,
+            text: selectedText,
+            page: pageVal,
+            color: color,
+            createdAt: new Date().toISOString()
+        };
+
+        paper.highlights = paper.highlights || [];
+        paper.highlights.push(newHl);
+        savePapers(false);
+
+        // Re-render highlights in the details drawer if it's currently open for this paper
+        renderHighlights(paper);
+        
+        // Clear window selection
+        selection.removeAllRanges();
+        
+        showToast("Seçilen metin PDF'ten başarıyla alıntılandı!", "success");
+    });
+
+    // Dynamic selection change to show/hide "Seçileni Alıntı Yap" button
+    document.addEventListener('selectionchange', () => {
+        if (!currentPdfPaperId) {
+            elements.btnPdfHighlightSelection.style.display = 'none';
+            return;
+        }
+        const selection = window.getSelection();
+        const selectedText = selection.toString().trim();
+        if (selectedText && selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0);
+            const container = elements.pdfCanvasWrapper;
+            if (container && container.contains(range.commonAncestorContainer)) {
+                elements.btnPdfHighlightSelection.style.display = 'flex';
+                return;
+            }
+        }
+        elements.btnPdfHighlightSelection.style.display = 'none';
+    });
+
+    // Handle PDF rendering scale adjustments on window resize
+    window.addEventListener('resize', () => {
+        if (currentPdfPaperId && pdfjsDoc) {
+            const pageVal = parseInt(elements.pdfCurrentPageInput.value) || 1;
+            renderPage(pageVal);
+        }
+    });
 }
 
 // --- GOALS ENGINE ---

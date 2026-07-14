@@ -1922,3 +1922,35 @@ body.censored .blur-censor-overlay {
         opacity: 1;
     }
 }
+
+/* Custom PDF.js text layer style modifications */
+.textLayer {
+    mix-blend-mode: multiply;
+}
+
+.textLayer ::selection {
+    background-color: rgba(99, 102, 241, 0.4) !important; /* matches primary violet color */
+    border-radius: 2px;
+}
+
+.pdf-viewer-container {
+    overflow: hidden;
+}
+
+#pdf-canvas-wrapper::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+#pdf-canvas-wrapper::-webkit-scrollbar-track {
+    background: #111115;
+}
+
+#pdf-canvas-wrapper::-webkit-scrollbar-thumb {
+    background: #2e2e38;
+    border-radius: 4px;
+}
+
+#pdf-canvas-wrapper::-webkit-scrollbar-thumb:hover {
+    background: #3f3f4d;
+}
