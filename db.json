@@ -187,14 +187,14 @@
       "project": "GÖM",
       "topic": "PDF",
       "importanceOrder": 11,
-      "isRead": true,
+      "isRead": false,
       "notes": "# Notlar: 1409.0575v3\n\n[Otomatik Eklenen PDF]\nKategori/Proje: GÖM\nDosya Yolu: GÖM/1409.0575v3.pdf\nEklenme Tarihi: 2026-07-13 14:57",
       "pdfFile": "GÖM/1409.0575v3.pdf",
       "createdAt": "2026-07-13T14:57:09.194758Z",
-      "updatedAt": "2026-07-13T14:57:09.194758Z",
+      "updatedAt": "2026-07-13T12:28:45.252Z",
       "pageCount": 6,
       "readPagesCount": 6,
-      "progress": 100
+      "progress": 0
     },
     {
       "id": "pdf-1783943829-11",
@@ -274,19 +274,5 @@
     }
   ],
   "deletedPdfFiles": [],
-  "goals": [
-    {
-      "id": "goal-1783945471982",
-      "title": "Demo Okuma Hedefi",
-      "targetDate": "202612-03-01",
-      "papers": [
-        {
-          "paperId": "pdf-1783920474-0",
-          "targetProgress": 100
-        }
-      ],
-      "createdAt": "2026-07-13T12:24:31.982Z",
-      "updatedAt": "2026-07-13T12:24:31.982Z"
-    }
-  ]
+  "goals": []
 }

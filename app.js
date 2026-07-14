@@ -270,6 +270,12 @@ function ensurePaperFields() {
         if (p.lastReadPage === undefined) {
             p.lastReadPage = 1;
         }
+        if (p.pageCount === undefined) {
+            p.pageCount = 1;
+        }
+        if (p.readPagesCount === undefined) {
+            p.readPagesCount = p.isRead ? p.pageCount : Math.round(((p.progress || 0) / 100) * p.pageCount);
+        }
     });
 }
 
@@ -338,6 +344,22 @@ async function syncWithServer() {
             headers: { 'Content-Type': 'application/json; charset=utf-8' },
             body: JSON.stringify(payload)
         });
+        
+        if (!res.ok) {
+            // Handle static server fallback gracefully
+            if (res.status === 404 || res.status === 405 || res.status === 501) {
+                console.warn("Mevcut HTTP sunucusu API isteklerini desteklemiyor (statik sunucu). Veriler sadece tarayıcı hafızasına kaydedildi.");
+                return;
+            }
+            throw new Error(`HTTP hatası! Durum: ${res.status}`);
+        }
+        
+        const contentType = res.headers.get("content-type");
+        if (!contentType || !contentType.includes("application/json")) {
+            console.warn("Sunucudan JSON formatında yanıt alınamadı. Statik sunucu modu aktif olabilir.");
+            return;
+        }
+        
         const resData = await res.json();
         if (resData.papers) {
             papers = resData.papers;
