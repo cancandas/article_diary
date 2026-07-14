@@ -765,7 +765,8 @@ function renderList() {
 // Helper to create a single Paper DOM Item
 function createPaperItemElement(paper, isDragEnabled) {
     const item = document.createElement('div');
-    item.className = `paper-item ${paper.isRead ? 'is-read' : ''}`;
+    const isSelected = (selectedPaperId === paper.id);
+    item.className = `paper-item ${paper.isRead ? 'is-read' : ''} ${isSelected ? 'selected' : ''}`;
     item.dataset.id = paper.id;
     if (isDragEnabled) {
         item.setAttribute('draggable', 'true');
@@ -1164,11 +1165,13 @@ function openDrawer(paperId) {
     selectedPaperId = paperId;
     elements.detailDrawer.classList.add('open');
     renderDrawerContent(paperId);
+    renderList();
 }
 
 function closeDrawer() {
     selectedPaperId = null;
     elements.detailDrawer.classList.remove('open');
+    renderList();
 }
 
 function renderDrawerContent(paperId) {
@@ -2102,7 +2105,6 @@ function restoreHistoryBackup(timestamp) {
 
 // --- PDF VIEWER ACTIONS ---
 let pdfjsDoc = null;
-let currentRenderTask = null;
 
 async function renderPage(pageNum) {
     if (!pdfjsDoc) return;
@@ -2172,6 +2174,11 @@ async function renderPage(pageNum) {
 async function openPdfViewer(paperId, targetPage = null) {
     const paper = papers.find(p => p.id === paperId);
     if (!paper || !paper.pdfFile) return;
+    
+    // Automatically open drawer if not already selected to keep list, drawer and PDF in sync
+    if (selectedPaperId !== paperId) {
+        openDrawer(paperId);
+    }
     
     currentPdfPaperId = paperId;
     elements.pdfViewerTitle.textContent = paper.title;

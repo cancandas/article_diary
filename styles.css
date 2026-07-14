@@ -549,6 +549,23 @@ h1, h2, h3, h4, h5, h6 {
     box-shadow: var(--shadow-md);
 }
 
+.paper-item.selected {
+    border-color: var(--primary) !important;
+    background-color: rgba(99, 102, 241, 0.06) !important;
+    box-shadow: 0 0 12px rgba(99, 102, 241, 0.15) !important;
+}
+
+.paper-item.selected::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 10%;
+    height: 80%;
+    width: 4px;
+    background-color: var(--primary);
+    border-radius: 0 4px 4px 0;
+}
+
 /* Dragging state */
 .paper-item.dragging {
     opacity: 0.4;
