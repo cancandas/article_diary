@@ -238,6 +238,45 @@ async function init() {
     await loadData();
     setupEventListeners();
     renderAll();
+    setupPrivacyCensor();
+}
+
+function setupPrivacyCensor() {
+    const overlay = document.createElement('div');
+    overlay.className = 'blur-censor-overlay';
+    overlay.innerHTML = `
+        <div class="blur-censor-content">
+            <div class="blur-censor-title">
+                <i data-lucide="eye-off" style="width: 28px; height: 28px; color: var(--primary);"></i>
+                Gizlilik Koruması Aktif
+            </div>
+            <p class="blur-censor-desc">Odağınızı kaybettiğinizde panel geçici olarak sansürlenir.</p>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    
+    // Window focus/blur tracking
+    window.addEventListener('blur', () => {
+        setTimeout(() => {
+            if (document.activeElement && document.activeElement.tagName === 'IFRAME') {
+                return; // Focus is inside PDF iframe
+            }
+            document.body.classList.add('censored');
+        }, 100);
+    });
+    
+    window.addEventListener('focus', () => {
+        document.body.classList.remove('censored');
+    });
+    
+    // Mouse leave/enter tracking (detect mouse leaving page bounds)
+    document.addEventListener('mouseleave', () => {
+        document.body.classList.add('censored');
+    });
+    
+    document.addEventListener('mouseenter', () => {
+        document.body.classList.remove('censored');
+    });
 }
 
 // --- DATA PERSISTENCE ---
@@ -1426,6 +1465,28 @@ function renderDrawerContent(paperId) {
         renderHighlights(paper);
         showToast("Vurgulanan alıntı başarıyla kaydedildi!", "success");
     });
+
+    // Reference links click handler inside Notes preview
+    const refLinks = elements.drawerContent.querySelectorAll('.note-ref-link');
+    refLinks.forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const idx = parseInt(link.getAttribute('data-ref-idx'));
+            const hls = paper.highlights || [];
+            const hl = hls[idx];
+            if (hl) {
+                if (paper.pdfFile) {
+                    openPdfViewer(paper.id);
+                    handlePageChange(hl.page);
+                    showToast(`@ref${idx + 1} sayfasına yönlendirildi: Sayfa ${hl.page}`, "info");
+                } else {
+                    showToast("Bu yayına bağlı bir PDF dosyası yok.", "warning");
+                }
+            } else {
+                showToast(`Referans verilen alıntı (@ref${idx + 1}) bulunamadı.`, "warning");
+            }
+        });
+    });
 }
 
 function renderHighlights(paper) {
@@ -1440,7 +1501,7 @@ function renderHighlights(paper) {
         return;
     }
     
-    hls.forEach(hl => {
+    hls.forEach((hl, index) => {
         const item = document.createElement('div');
         
         const colorStyles = {
@@ -1466,15 +1527,38 @@ function renderHighlights(paper) {
                 "${escapeHTML(hl.text)}"
             </div>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.25rem;">
-                <span class="badge badge-pdf btn-go-to-page" data-page="${hl.page}" style="font-size: 0.7rem; cursor: pointer; font-weight: 600; background-color: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: var(--text-secondary); display: flex; align-items: center; gap: 0.25rem;" title="PDF'te bu sayfaya git">
-                    <i data-lucide="file-text" style="width: 10px; height: 10px;"></i>
-                    Sayfa ${hl.page}
-                </span>
+                <div style="display: flex; gap: 0.35rem; align-items: center;">
+                    <span class="badge badge-pdf btn-go-to-page" data-page="${hl.page}" style="font-size: 0.7rem; cursor: pointer; font-weight: 600; background-color: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: var(--text-secondary); display: flex; align-items: center; gap: 0.25rem;" title="PDF'te bu sayfaya git">
+                        <i data-lucide="file-text" style="width: 10px; height: 10px;"></i>
+                        Sayfa ${hl.page}
+                    </span>
+                    <span class="btn-copy-ref" data-ref-text="@ref${index + 1}" style="font-size: 0.7rem; cursor: pointer; font-weight: 700; color: var(--primary); background-color: rgba(255,255,255,0.05); padding: 0.1rem 0.35rem; border-radius: 4px; border: 1px solid var(--border-color);" title="Tıklayın ve Notlarda Referans Göstermek için Kopyalayın (@ref${index + 1})">
+                        @ref${index + 1}
+                    </span>
+                </div>
                 <button class="btn-icon btn-delete-highlight" data-id="${hl.id}" style="padding: 2px; color: var(--text-muted); cursor: pointer;" title="Alıntıyı Sil">
                     <i data-lucide="trash-2" style="width: 12px; height: 12px;"></i>
                 </button>
             </div>
         `;
+        
+        // Add click listener to copy reference text to clipboard
+        item.querySelector('.btn-copy-ref').addEventListener('click', (e) => {
+            e.stopPropagation();
+            const refText = e.currentTarget.getAttribute('data-ref-text');
+            navigator.clipboard.writeText(refText).then(() => {
+                showToast(`Referans kodu kopyalandı: ${refText}. Bunu kişisel notlarınızda kullanabilirsiniz!`, "success");
+            }).catch(err => {
+                // fallback
+                const input = document.createElement('input');
+                input.value = refText;
+                document.body.appendChild(input);
+                input.select();
+                document.execCommand('copy');
+                document.body.removeChild(input);
+                showToast(`Referans kodu kopyalandı: ${refText}`, "success");
+            });
+        });
         
         // Add click listener to page badge to navigate PDF
         item.querySelector('.btn-go-to-page').addEventListener('click', (e) => {
@@ -2046,7 +2130,22 @@ function handlePageChange(value) {
     elements.pdfCurrentPageInput.value = page;
     
     const pdfPath = (isServerMode ? `/pdfs/` : `./pdfs/`) + paper.pdfFile + `#page=${page}`;
+    
+    // Force reload iframe if the path remains the same (otherwise browser won't navigate on hash change in PDF viewer)
+    const oldSrc = elements.pdfIframe.src;
     elements.pdfIframe.src = pdfPath;
+    
+    if (oldSrc.split('#')[0] === pdfPath.split('#')[0]) {
+        try {
+            if (elements.pdfIframe.contentWindow) {
+                elements.pdfIframe.contentWindow.location.reload();
+            }
+        } catch (e) {
+            // Cross-origin fallback (force iframe refresh by resetting src)
+            elements.pdfIframe.src = '';
+            elements.pdfIframe.src = pdfPath;
+        }
+    }
     
     savePapers(false);
 }
@@ -2083,6 +2182,12 @@ function parseMarkdown(text) {
     // Italic (*text* or _text_)
     html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
     html = html.replace(/_(.*?)_/g, '<em>$1</em>');
+    
+    // Highlights reference parser (e.g. @ref1 -> clickable badge link)
+    html = html.replace(/@ref(\d+)\b/gi, (match, num) => {
+        const idx = parseInt(num) - 1;
+        return `<a href="#" class="note-ref-link" data-ref-idx="${idx}" style="color: var(--primary); font-weight: 600; text-decoration: underline; cursor: pointer;">@ref${num}</a>`;
+    });
     
     // Bullet points (line starting with - or *)
     // Wrap groups of list items in <ul>
