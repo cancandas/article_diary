@@ -331,6 +331,17 @@ function ensurePaperFields() {
         if (p.highlights === undefined) {
             p.highlights = [];
         }
+        if (p.personalNotes === undefined) {
+            p.personalNotes = [];
+            if (p.notes && p.notes.trim()) {
+                p.personalNotes.push({
+                    id: `note-legacy-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                    content: p.notes,
+                    createdAt: p.createdAt || new Date().toISOString(),
+                    updatedAt: p.updatedAt || new Date().toISOString()
+                });
+            }
+        }
     });
 }
 
@@ -1176,14 +1187,32 @@ function setupCombobox(inputEl, dropdownEl, dataProvider, onSelect) {
 function openDrawer(paperId) {
     selectedPaperId = paperId;
     elements.detailDrawer.classList.add('open');
+    document.querySelector('.app-container').classList.add('drawer-active');
     renderDrawerContent(paperId);
     renderList();
+    
+    // If PDF is open, trigger page re-render to scale to new width
+    if (currentPdfPaperId && pdfjsDoc) {
+        setTimeout(() => {
+            const pageVal = parseInt(elements.pdfCurrentPageInput.value) || 1;
+            renderPage(pageVal);
+        }, 300);
+    }
 }
 
 function closeDrawer() {
     selectedPaperId = null;
     elements.detailDrawer.classList.remove('open');
+    document.querySelector('.app-container').classList.remove('drawer-active');
     renderList();
+    
+    // If PDF is open, trigger page re-render to scale to new width
+    if (currentPdfPaperId && pdfjsDoc) {
+        setTimeout(() => {
+            const pageVal = parseInt(elements.pdfCurrentPageInput.value) || 1;
+            renderPage(pageVal);
+        }, 300);
+    }
 }
 
 function renderDrawerContent(paperId) {
@@ -1293,25 +1322,23 @@ function renderDrawerContent(paperId) {
             </div>
         </div>
 
-        <div class="drawer-notes-section">
-            <div class="drawer-notes-header">
-                <h3>Kişisel Notlar</h3>
-                <div>
-                    <button id="btn-toggle-notes-view" class="btn-secondary btn-xs">
-                        <i data-lucide="${isNotesEditMode ? 'eye' : 'edit-2'}"></i>
-                        <span>${isNotesEditMode ? 'Önizleme' : 'Düzenle'}</span>
-                    </button>
-                </div>
+        <div class="drawer-notes-section" style="display: flex; flex-direction: column; gap: 0.75rem; border-top: 1px solid var(--border-color); padding-top: 0.75rem; margin-top: 0.5rem;">
+            <h3 style="font-size: 0.95rem; font-weight: 600; color: var(--text-primary); margin: 0; display: flex; align-items: center; gap: 0.5rem;">
+                <i data-lucide="notebook" style="width: 16px; height: 16px; color: var(--primary);"></i>
+                Kişisel Notlar (${paper.personalNotes ? paper.personalNotes.length : 0})
+            </h3>
+            
+            <div id="drawer-notes-list" style="display: flex; flex-direction: column; gap: 0.75rem; max-height: 300px; overflow-y: auto; padding-right: 0.25rem; margin-top: 0.25rem;">
+                <!-- Rendered dynamically -->
             </div>
             
-            ${isNotesEditMode ? `
-                <textarea class="notes-textarea" id="notes-edit-field" placeholder="Notlarınızı yazın...">${paper.notes || ''}</textarea>
-                <span class="text-secondary text-sm" style="font-size:0.75rem; text-align:right;">Yazarken otomatik olarak kaydedilir.</span>
-            ` : `
-                <div class="notes-preview-box" id="notes-preview-field">
-                    ${paper.notes ? parseMarkdown(paper.notes) : '<em class="text-muted">Not eklenmemiş. Düzenle butonuna tıklayarak not yazabilirsiniz. Notlar markdown destekler.</em>'}
+            <div class="add-note-form" style="display: flex; flex-direction: column; gap: 0.5rem; border-top: 1px dashed var(--border-color); padding-top: 0.75rem; margin-top: 0.25rem;">
+                <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">Yeni Not Ekle:</span>
+                <textarea id="new-note-textarea" rows="3" placeholder="Yeni bir not yazın (Markdown desteklenir)..." style="width: 100%; border: 1px solid var(--border-color); border-radius: 8px; background-color: var(--bg-card); color: var(--text-primary); font-size: 0.85rem; padding: 0.5rem; resize: vertical; font-family: inherit; outline: none;"></textarea>
+                <div style="display: flex; justify-content: flex-end;">
+                    <button id="btn-add-new-note" class="btn-primary btn-xs" style="padding: 0.4rem 1rem;">Ekle</button>
                 </div>
-            `}
+            </div>
         </div>
         
         <div style="font-size:0.75rem; color:var(--text-muted); display:flex; flex-direction:column; gap:0.25rem;">
@@ -1322,28 +1349,38 @@ function renderDrawerContent(paperId) {
 
     lucide.createIcons();
 
-    // Toggle button listener
-    const toggleNotesBtn = document.getElementById('btn-toggle-notes-view');
-    toggleNotesBtn.addEventListener('click', () => {
-        isNotesEditMode = !isNotesEditMode;
-        renderDrawerContent(paperId);
-    });
+    // Render Personal Notes list
+    renderPersonalNotes(paper);
 
-    // Notes auto-save listener
-    if (isNotesEditMode) {
-        const notesArea = document.getElementById('notes-edit-field');
-        
-        // Save on keystroke (debounced) and on blur
-        let timeout = null;
-        notesArea.addEventListener('input', () => {
-            clearTimeout(timeout);
-            timeout = setTimeout(() => {
-                saveNotes(paperId, notesArea.value);
-            }, 800);
-        });
-
-        notesArea.addEventListener('blur', () => {
-            saveNotes(paperId, notesArea.value);
+    // Add New Note Listener
+    const addNewNoteBtn = document.getElementById('btn-add-new-note');
+    const newNoteTextarea = document.getElementById('new-note-textarea');
+    if (addNewNoteBtn && newNoteTextarea) {
+        addNewNoteBtn.addEventListener('click', () => {
+            const textVal = newNoteTextarea.value.trim();
+            if (!textVal) {
+                showToast("Lütfen eklenecek notu yazın.", "warning");
+                return;
+            }
+            
+            const newNoteObj = {
+                id: `note-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                content: textVal,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            };
+            
+            paper.personalNotes = paper.personalNotes || [];
+            paper.personalNotes.push(newNoteObj);
+            paper.notes = paper.personalNotes.map(n => n.content).join('\n\n---\n\n');
+            
+            savePapers(false);
+            newNoteTextarea.value = '';
+            renderPersonalNotes(paper);
+            
+            // Re-render full drawer to update the notes count badge in header
+            renderDrawerContent(paperId);
+            showToast("Yeni not başarıyla eklendi!", "success");
         });
     }
 
@@ -1512,6 +1549,100 @@ function renderDrawerContent(paperId) {
             }
         });
     });
+}
+
+let activeEditingNoteId = null;
+
+function renderPersonalNotes(paper) {
+    const listContainer = document.getElementById('drawer-notes-list');
+    if (!listContainer) return;
+    
+    listContainer.innerHTML = '';
+    const notes = paper.personalNotes || [];
+    
+    if (notes.length === 0) {
+        listContainer.innerHTML = `<p style="font-size: 0.8rem; color: var(--text-muted); text-align: center; margin: 1rem 0; font-style: italic;">Henüz eklenmiş not bulunmamaktadır.</p>`;
+        return;
+    }
+    
+    notes.forEach((note) => {
+        const item = document.createElement('div');
+        item.className = 'personal-note-card';
+        item.style.padding = '0.75rem';
+        item.style.border = '1px solid var(--border-color)';
+        item.style.borderRadius = '8px';
+        item.style.backgroundColor = 'var(--bg-card)';
+        item.style.display = 'flex';
+        item.style.flexDirection = 'column';
+        item.style.gap = '0.5rem';
+        
+        const isEditing = activeEditingNoteId === note.id;
+        const dateStr = new Date(note.updatedAt).toLocaleString('tr-TR', { day: 'numeric', month: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        
+        if (isEditing) {
+            item.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: var(--text-muted); border-bottom: 1px dashed var(--border-color); padding-bottom: 0.25rem;">
+                    <span>Düzenleniyor...</span>
+                    <span>${dateStr}</span>
+                </div>
+                <textarea class="note-edit-textarea" style="width: 100%; border: 1px solid var(--border-color); border-radius: 6px; background-color: var(--bg-app); color: var(--text-primary); font-size: 0.85rem; padding: 0.4rem; resize: vertical; min-height: 80px; font-family: inherit; outline: none;">${note.content}</textarea>
+                <div style="display: flex; justify-content: flex-end; gap: 0.35rem; margin-top: 0.25rem;">
+                    <button class="btn-secondary btn-xs btn-cancel-edit-note">İptal</button>
+                    <button class="btn-primary btn-xs btn-save-edit-note">Kaydet</button>
+                </div>
+            `;
+            
+            item.querySelector('.btn-cancel-edit-note').addEventListener('click', () => {
+                activeEditingNoteId = null;
+                renderPersonalNotes(paper);
+            });
+            
+            item.querySelector('.btn-save-edit-note').addEventListener('click', () => {
+                const newContent = item.querySelector('.note-edit-textarea').value.trim();
+                if (newContent) {
+                    note.content = newContent;
+                    note.updatedAt = new Date().toISOString();
+                    paper.notes = paper.personalNotes.map(n => n.content).join('\n\n---\n\n');
+                    savePapers(false);
+                    activeEditingNoteId = null;
+                    renderPersonalNotes(paper);
+                    showToast("Not başarıyla güncellendi!", "success");
+                }
+            });
+        } else {
+            item.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: var(--text-muted); border-bottom: 1px dashed var(--border-color); padding-bottom: 0.25rem;">
+                    <span style="font-weight: 600; color: var(--text-secondary);"><i data-lucide="calendar" style="width:10px; height:10px; display:inline-block; margin-right:0.25rem;"></i>${dateStr}</span>
+                    <div style="display: flex; gap: 0.25rem;">
+                        <button class="btn-icon btn-xs btn-edit-note" style="width: 20px; height: 20px; padding: 0; color: var(--text-muted);" title="Notu Düzenle"><i data-lucide="edit-2" style="width: 11px; height: 11px;"></i></button>
+                        <button class="btn-icon btn-xs btn-icon-danger btn-delete-note" style="width: 20px; height: 20px; padding: 0;" title="Notu Sil"><i data-lucide="trash-2" style="width: 11px; height: 11px;"></i></button>
+                    </div>
+                </div>
+                <div class="note-preview-content" style="font-size: 0.85rem; color: var(--text-primary); line-height: 1.4; word-break: break-word;">
+                    ${parseMarkdown(note.content)}
+                </div>
+            `;
+            
+            item.querySelector('.btn-edit-note').addEventListener('click', () => {
+                activeEditingNoteId = note.id;
+                renderPersonalNotes(paper);
+            });
+            
+            item.querySelector('.btn-delete-note').addEventListener('click', () => {
+                if (confirm("Bu notu silmek istediğinize emin misiniz?")) {
+                    paper.personalNotes = paper.personalNotes.filter(n => n.id !== note.id);
+                    paper.notes = paper.personalNotes.map(n => n.content).join('\n\n---\n\n');
+                    savePapers(false);
+                    renderPersonalNotes(paper);
+                    showToast("Not silindi.", "info");
+                }
+            });
+        }
+        
+        listContainer.appendChild(item);
+    });
+    
+    lucide.createIcons();
 }
 
 function renderHighlights(paper) {
@@ -1729,6 +1860,23 @@ function handlePaperFormSubmit(e) {
         const idx = papers.findIndex(p => p.id === id);
         if (idx !== -1) {
             const oldPaper = papers[idx];
+            let finalPersonalNotes = oldPaper.personalNotes || [];
+            
+            // Sync with personalNotes if note content changed
+            if (notes !== oldPaper.notes) {
+                if (finalPersonalNotes.length > 0) {
+                    finalPersonalNotes[0].content = notes;
+                    finalPersonalNotes[0].updatedAt = new Date().toISOString();
+                } else {
+                    finalPersonalNotes = [{
+                        id: `note-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                        content: notes,
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString()
+                    }];
+                }
+            }
+            
             papers[idx] = {
                 ...oldPaper,
                 title,
@@ -1743,12 +1891,22 @@ function handlePaperFormSubmit(e) {
                 pageCount: finalPageCount,
                 readPagesCount: finalReadPagesCount,
                 notes,
+                personalNotes: finalPersonalNotes,
                 updatedAt: new Date().toISOString()
             };
         }
     } else {
         // Add mode
         const maxImportance = papers.length > 0 ? Math.max(...papers.map(p => p.importanceOrder)) : 0;
+        const initialPersonalNotes = [];
+        if (notes && notes.trim()) {
+            initialPersonalNotes.push({
+                id: `note-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                content: notes,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            });
+        }
         const newPaper = {
             id: `paper-${Date.now()}`,
             title,
@@ -1765,6 +1923,7 @@ function handlePaperFormSubmit(e) {
             readPagesCount: finalReadPagesCount,
             lastReadPage: 1,
             notes,
+            personalNotes: initialPersonalNotes,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
         };
@@ -2202,6 +2361,7 @@ async function openPdfViewer(paperId, targetPage = null) {
     }
     
     currentPdfPaperId = paperId;
+    document.querySelector('.app-container').classList.add('pdf-active');
     elements.pdfViewerTitle.textContent = paper.title;
     elements.pdfViewerContainer.style.display = 'flex';
     
@@ -2275,6 +2435,7 @@ function closePdfViewer() {
     elements.btnPdfHighlightSelection.style.display = 'none';
     elements.pdfViewerTitle.textContent = "";
     elements.pdfViewerContainer.style.display = 'none';
+    document.querySelector('.app-container').classList.remove('pdf-active');
     currentPdfPaperId = null;
 }
 
@@ -2541,6 +2702,11 @@ function setupEventListeners() {
     elements.pdfCurrentPageInput.addEventListener('change', (e) => {
         handlePageChange(e.target.value);
     });
+    
+    // Disable default wheel scrolling inside page number input
+    elements.pdfCurrentPageInput.addEventListener('wheel', (e) => {
+        e.preventDefault();
+    }, { passive: false });
 
     if (elements.pdfPageSlider) {
         elements.pdfPageSlider.addEventListener('input', (e) => {
@@ -2549,6 +2715,10 @@ function setupEventListeners() {
         elements.pdfPageSlider.addEventListener('change', (e) => {
             handlePageChange(e.target.value);
         });
+        // Disable default wheel scrolling on slider
+        elements.pdfPageSlider.addEventListener('wheel', (e) => {
+            e.preventDefault();
+        }, { passive: false });
     }
 
     // Scroll to change page logic with boundary checking

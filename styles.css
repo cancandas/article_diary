@@ -1567,6 +1567,23 @@ h1, h2, h3, h4, h5, h6 {
     transition: all var(--transition-normal);
 }
 
+/* Layout overrides when PDF is open */
+.pdf-active #view-papers-container {
+    display: none !important;
+}
+
+.pdf-active .pdf-viewer-container {
+    display: flex !important;
+    width: 100% !important;
+    border-left: none !important;
+}
+
+/* Side-by-side layout when both PDF and Details Drawer are open */
+.pdf-active.drawer-active .pdf-viewer-container {
+    width: calc(100% - var(--drawer-width)) !important;
+    border-right: 1px solid var(--border-color) !important;
+}
+
 .pdf-viewer-header {
     display: flex;
     justify-content: space-between;
