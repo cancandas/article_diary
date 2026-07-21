@@ -226,6 +226,10 @@ const elements = {
     pdfCurrentPageInput: document.getElementById('pdf-current-page'),
     pdfPageSlider: document.getElementById('pdf-page-slider'),
     pdfTotalPages: document.getElementById('pdf-total-pages'),
+    pdfZoomIn: document.getElementById('btn-pdf-zoom-in'),
+    pdfZoomOut: document.getElementById('btn-pdf-zoom-out'),
+    pdfZoomReset: document.getElementById('btn-pdf-zoom-reset'),
+    pdfZoomLevel: document.getElementById('pdf-zoom-level'),
     btnPdfPageDec: document.getElementById('btn-pdf-page-dec'),
     btnPdfPageInc: document.getElementById('btn-pdf-page-inc'),
 
@@ -2277,6 +2281,7 @@ function restoreHistoryBackup(timestamp) {
 // --- PDF VIEWER ACTIONS ---
 let pdfjsDoc = null;
 let pdfScrollTarget = null;
+let pdfZoomFactor = 1.0;
 
 async function renderPage(pageNum) {
     if (!pdfjsDoc) return;
@@ -2297,7 +2302,8 @@ async function renderPage(pageNum) {
         // Calculate dynamic scale to fit the canvas wrapper container width
         const wrapperWidth = elements.pdfCanvasWrapper.clientWidth - 40; // Subtract padding/margin
         const unscaledViewport = page.getViewport({ scale: 1.0 });
-        const scale = wrapperWidth / unscaledViewport.width;
+        const baseScale = wrapperWidth / unscaledViewport.width;
+        const scale = baseScale * pdfZoomFactor;
         const viewport = page.getViewport({ scale: scale || 1.0 });
         
         // Render Canvas
@@ -2361,6 +2367,10 @@ async function openPdfViewer(paperId, targetPage = null) {
     }
     
     currentPdfPaperId = paperId;
+    pdfZoomFactor = 1.0;
+    if (elements.pdfZoomLevel) {
+        elements.pdfZoomLevel.textContent = "100%";
+    }
     document.querySelector('.app-container').classList.add('pdf-active');
     elements.pdfViewerTitle.textContent = paper.title;
     elements.pdfViewerContainer.style.display = 'flex';
@@ -2432,7 +2442,7 @@ function closePdfViewer() {
     elements.pdfCanvas.width = 0;
     elements.pdfCanvas.height = 0;
     elements.pdfTextLayer.innerHTML = '';
-    elements.btnPdfHighlightSelection.style.display = 'none';
+    elements.btnPdfHighlightSelection.disabled = true;
     elements.pdfViewerTitle.textContent = "";
     elements.pdfViewerContainer.style.display = 'none';
     document.querySelector('.app-container').classList.remove('pdf-active');
@@ -2781,6 +2791,46 @@ function setupEventListeners() {
         handlePageChange(val + 1);
     });
 
+    if (elements.pdfZoomIn) {
+        elements.pdfZoomIn.addEventListener('click', () => {
+            if (!pdfjsDoc || !currentPdfPaperId) return;
+            if (pdfZoomFactor < 3.0) {
+                pdfZoomFactor = Math.min(3.0, pdfZoomFactor + 0.15);
+                if (elements.pdfZoomLevel) {
+                    elements.pdfZoomLevel.textContent = Math.round(pdfZoomFactor * 100) + "%";
+                }
+                const pageVal = parseInt(elements.pdfCurrentPageInput.value) || 1;
+                renderPage(pageVal);
+            }
+        });
+    }
+
+    if (elements.pdfZoomOut) {
+        elements.pdfZoomOut.addEventListener('click', () => {
+            if (!pdfjsDoc || !currentPdfPaperId) return;
+            if (pdfZoomFactor > 0.4) {
+                pdfZoomFactor = Math.max(0.4, pdfZoomFactor - 0.15);
+                if (elements.pdfZoomLevel) {
+                    elements.pdfZoomLevel.textContent = Math.round(pdfZoomFactor * 100) + "%";
+                }
+                const pageVal = parseInt(elements.pdfCurrentPageInput.value) || 1;
+                renderPage(pageVal);
+            }
+        });
+    }
+
+    if (elements.pdfZoomReset) {
+        elements.pdfZoomReset.addEventListener('click', () => {
+            if (!pdfjsDoc || !currentPdfPaperId) return;
+            pdfZoomFactor = 1.0;
+            if (elements.pdfZoomLevel) {
+                elements.pdfZoomLevel.textContent = "100%";
+            }
+            const pageVal = parseInt(elements.pdfCurrentPageInput.value) || 1;
+            renderPage(pageVal);
+        });
+    }
+
     elements.btnAddGoal.addEventListener('click', openAddGoalModal);
     elements.goalForm.addEventListener('submit', handleGoalFormSubmit);
 
@@ -2828,10 +2878,10 @@ function setupEventListeners() {
         showToast("Seçilen metin PDF'ten başarıyla alıntılandı!", "success");
     });
 
-    // Dynamic selection change to show/hide "Seçileni Alıntı Yap" button
+    // Dynamic selection change to enable/disable "Seçileni Alıntı Yap" button
     document.addEventListener('selectionchange', () => {
         if (!currentPdfPaperId) {
-            elements.btnPdfHighlightSelection.style.display = 'none';
+            elements.btnPdfHighlightSelection.disabled = true;
             return;
         }
         const selection = window.getSelection();
@@ -2840,11 +2890,11 @@ function setupEventListeners() {
             const range = selection.getRangeAt(0);
             const container = elements.pdfCanvasWrapper;
             if (container && container.contains(range.commonAncestorContainer)) {
-                elements.btnPdfHighlightSelection.style.display = 'flex';
+                elements.btnPdfHighlightSelection.disabled = false;
                 return;
             }
         }
-        elements.btnPdfHighlightSelection.style.display = 'none';
+        elements.btnPdfHighlightSelection.disabled = true;
     });
 
     // Handle PDF rendering scale adjustments on window resize

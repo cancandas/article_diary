@@ -774,6 +774,14 @@ h1, h2, h3, h4, h5, h6 {
     background-color: var(--primary-hover);
     box-shadow: 0 0 10px rgba(99, 102, 241, 0.4);
 }
+.btn-primary:disabled {
+    background-color: var(--bg-card-hover) !important;
+    color: var(--text-muted) !important;
+    border: 1px solid var(--border-color) !important;
+    cursor: not-allowed !important;
+    box-shadow: none !important;
+    opacity: 0.65;
+}
 
 .btn-secondary {
     background-color: var(--bg-card-hover);
