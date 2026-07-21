@@ -224,6 +224,8 @@ const elements = {
     pdfViewerTitle: document.getElementById('pdf-viewer-title'),
     btnClosePdf: document.getElementById('btn-close-pdf'),
     pdfCurrentPageInput: document.getElementById('pdf-current-page'),
+    pdfPageSlider: document.getElementById('pdf-page-slider'),
+    pdfTotalPages: document.getElementById('pdf-total-pages'),
     btnPdfPageDec: document.getElementById('btn-pdf-page-dec'),
     btnPdfPageInc: document.getElementById('btn-pdf-page-inc'),
 
@@ -1004,6 +1006,16 @@ function togglePaperReadStatus(id) {
 }
 
 function deletePaper(id) {
+    const paperToDelete = papers.find(p => p.id === id);
+    if (paperToDelete && paperToDelete.pdfFile) {
+        if (!deletedPdfFiles.includes(paperToDelete.pdfFile)) {
+            deletedPdfFiles.push(paperToDelete.pdfFile);
+        }
+    }
+    if (currentPdfPaperId === id) {
+        closePdfViewer();
+    }
+
     papers = papers.filter(p => p.id !== id);
     // Clean references in goals
     goals.forEach(goal => {
@@ -2105,6 +2117,7 @@ function restoreHistoryBackup(timestamp) {
 
 // --- PDF VIEWER ACTIONS ---
 let pdfjsDoc = null;
+let pdfScrollTarget = null;
 
 async function renderPage(pageNum) {
     if (!pdfjsDoc) return;
@@ -2160,6 +2173,14 @@ async function renderPage(pageNum) {
         // Show page render container, hide spinner
         elements.pdfLoadingSpinner.style.display = 'none';
         elements.pdfPageRenderContainer.style.display = 'block';
+
+        // Apply scroll target location if requested by navigation
+        if (pdfScrollTarget === 'bottom') {
+            elements.pdfCanvasWrapper.scrollTop = elements.pdfCanvasWrapper.scrollHeight - elements.pdfCanvasWrapper.clientHeight;
+        } else if (pdfScrollTarget === 'top') {
+            elements.pdfCanvasWrapper.scrollTop = 0;
+        }
+        pdfScrollTarget = null; // Reset
     } catch (e) {
         if (e.name === 'RenderingCancelledException' || e.message === 'Rendering cancelled, page.render() promise rejected') {
             // Expected when page changes quickly, ignore
@@ -2223,6 +2244,14 @@ async function openPdfViewer(paperId, targetPage = null) {
         paper.lastReadPage = finalPage;
         elements.pdfCurrentPageInput.value = finalPage;
         
+        if (elements.pdfPageSlider) {
+            elements.pdfPageSlider.max = pdfjsDoc.numPages;
+            elements.pdfPageSlider.value = finalPage;
+        }
+        if (elements.pdfTotalPages) {
+            elements.pdfTotalPages.textContent = `/ ${pdfjsDoc.numPages}`;
+        }
+        
         await renderPage(finalPage);
         
         showToast(`PDF yüklendi (Toplam ${pdfjsDoc.numPages} sayfa)`, "success");
@@ -2260,6 +2289,20 @@ function handlePageChange(value) {
     
     paper.lastReadPage = page;
     elements.pdfCurrentPageInput.value = page;
+    if (elements.pdfPageSlider) {
+        elements.pdfPageSlider.value = page;
+    }
+    
+    // Sync with the drawer if it's currently open for this paper
+    const drawerLastPageInput = document.getElementById('drawer-last-page');
+    if (drawerLastPageInput && selectedPaperId === currentPdfPaperId) {
+        drawerLastPageInput.value = page;
+    }
+    
+    const hlPageInput = document.getElementById('highlight-page-input');
+    if (hlPageInput && selectedPaperId === currentPdfPaperId) {
+        hlPageInput.value = page;
+    }
     
     renderPage(page);
     savePapers(false);
@@ -2498,6 +2541,63 @@ function setupEventListeners() {
     elements.pdfCurrentPageInput.addEventListener('change', (e) => {
         handlePageChange(e.target.value);
     });
+
+    if (elements.pdfPageSlider) {
+        elements.pdfPageSlider.addEventListener('input', (e) => {
+            elements.pdfCurrentPageInput.value = e.target.value;
+        });
+        elements.pdfPageSlider.addEventListener('change', (e) => {
+            handlePageChange(e.target.value);
+        });
+    }
+
+    // Scroll to change page logic with boundary checking
+    let lastWheelTime = 0;
+    elements.pdfCanvasWrapper.addEventListener('wheel', (e) => {
+        if (!pdfjsDoc || !currentPdfPaperId) return;
+        
+        const wrapper = elements.pdfCanvasWrapper;
+        const scrollTop = wrapper.scrollTop;
+        const scrollHeight = wrapper.scrollHeight;
+        const clientHeight = wrapper.clientHeight;
+        
+        // Check if we are near the boundaries (5px buffer)
+        const isAtTop = scrollTop <= 5;
+        const isAtBottom = scrollTop >= scrollHeight - clientHeight - 5;
+        
+        const now = Date.now();
+        // Cooldown of 600ms to prevent rapid page flipping
+        if (now - lastWheelTime < 600) {
+            if ((isAtTop && e.deltaY < 0) || (isAtBottom && e.deltaY > 0)) {
+                e.preventDefault();
+            }
+            return;
+        }
+        
+        let pageChanged = false;
+        let currentPage = parseInt(elements.pdfCurrentPageInput.value) || 1;
+        
+        if (isAtTop && e.deltaY < 0) {
+            // Scrolled up at the top -> previous page
+            if (currentPage > 1) {
+                pdfScrollTarget = 'bottom';
+                handlePageChange(currentPage - 1);
+                pageChanged = true;
+            }
+        } else if (isAtBottom && e.deltaY > 0) {
+            // Scrolled down at the bottom -> next page
+            if (currentPage < pdfjsDoc.numPages) {
+                pdfScrollTarget = 'top';
+                handlePageChange(currentPage + 1);
+                pageChanged = true;
+            }
+        }
+        
+        if (pageChanged) {
+            e.preventDefault();
+            lastWheelTime = now;
+        }
+    }, { passive: false });
 
     elements.btnPdfPageDec.addEventListener('click', () => {
         let val = parseInt(elements.pdfCurrentPageInput.value) || 1;

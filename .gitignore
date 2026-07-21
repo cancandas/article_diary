@@ -9,3 +9,8 @@ __pycache__/
 *.tmp
 .DS_Store
 Thumbs.db
+
+new_papers/
+.agents/
+KENDIME_NOT.md
+db.json

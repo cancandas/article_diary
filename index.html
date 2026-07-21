@@ -206,6 +206,7 @@
                             </button>
                             
                             <label for="pdf-current-page" style="font-size: 0.8rem; color: var(--text-secondary); white-space: nowrap;">Sayfa:</label>
+                            <input type="range" id="pdf-page-slider" min="1" max="1" value="1" style="width: 100px; height: 6px; cursor: pointer; accent-color: var(--primary);" title="Sürükleyerek sayfa değiştirin">
                             <div style="display: flex; align-items: center; border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden; background-color: var(--bg-app);">
                                 <button type="button" id="btn-pdf-page-dec" class="btn-icon btn-xs" style="width: 28px; height: 28px; border-radius: 0;" title="Önceki Sayfa">
                                     <i data-lucide="minus" style="width: 12px; height: 12px;"></i>
@@ -215,6 +216,7 @@
                                     <i data-lucide="plus" style="width: 12px; height: 12px;"></i>
                                 </button>
                             </div>
+                            <span id="pdf-total-pages" style="font-size: 0.85rem; color: var(--text-secondary); font-weight: 600; white-space: nowrap;">/ 1</span>
                         </div>
                         <button id="btn-close-pdf" class="btn-icon" title="PDF Göstericiyi Kapat">
                             <i data-lucide="x"></i>

@@ -321,6 +321,26 @@ class PaperListRequestHandler(http.server.SimpleHTTPRequestHandler):
             try:
                 data = json.loads(post_data.decode('utf-8'))
                 
+                # Delete PDF files physically on disk if they are in deletedPdfFiles list
+                deleted_pdfs = data.get("deletedPdfFiles", [])
+                for pdf_file in deleted_pdfs:
+                    if pdf_file:
+                        filepath = os.path.normpath(os.path.join(PDFS_DIR, pdf_file.replace('/', os.sep)))
+                        normalized_filepath = os.path.abspath(filepath)
+                        normalized_pdf_dir = os.path.abspath(PDFS_DIR)
+                        if normalized_filepath.startswith(normalized_pdf_dir) and os.path.exists(filepath) and os.path.isfile(filepath):
+                            try:
+                                os.remove(filepath)
+                                print(f"Deleted PDF file from folder: {filepath}")
+                                
+                                # Clean up empty parent directory
+                                parent_dir = os.path.dirname(filepath)
+                                if parent_dir != normalized_pdf_dir and os.path.exists(parent_dir) and not os.listdir(parent_dir):
+                                    os.rmdir(parent_dir)
+                                    print(f"Cleaned up empty parent directory: {parent_dir}")
+                            except Exception as e:
+                                print(f"Error deleting PDF file {filepath}: {e}")
+                
                 # Automatically organize PDF files into project subdirectories
                 papers = data.get("papers", [])
                 for paper in papers:
